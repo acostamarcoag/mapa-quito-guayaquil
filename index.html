@@ -58,7 +58,7 @@
     }
 
     label { display:block; font-size: 12px; color: rgba(0,0,0,.62); margin-bottom: 6px; }
-    select {
+    select, input {
       width: 100%;
       padding: 10px;
       border-radius: 10px;
@@ -66,6 +66,7 @@
       background: #fff;
       font-size: 14px;
       outline: none;
+      box-sizing: border-box;
     }
     .btnRow { display:flex; gap:10px; margin-top: 10px; }
     .btn {
@@ -110,7 +111,7 @@
     @media (max-width: 720px) {
       #app { flex-direction: column; }
       #sidebar { width: 100%; max-width: none; border-right: none; border-bottom: 1px solid rgba(0,0,0,.08); }
-      #map { height: calc(100vh - 420px); min-height: 320px; }
+      #map { height: calc(100vh - 520px); min-height: 320px; }
     }
   </style>
 </head>
@@ -176,6 +177,22 @@
         <ul class="list" id="listaParroquias"></ul>
       </div>
 
+      <!-- IR A PUNTO (Google Maps style) -->
+      <div class="card">
+        <div class="h1" style="font-size:14px;margin-bottom:8px">Ir a un punto</div>
+        <label>Latitud, Longitud (ej: -2.1894, -79.8891)</label>
+        <input id="coordInput" type="text" placeholder="-2.1894, -79.8891">
+        <div class="btnRow">
+          <button class="btn primary" id="btnIrPunto">Ir</button>
+          <button class="btn" id="btnCopiarLink">Copiar link</button>
+        </div>
+        <div class="muted" style="margin-top:8px">
+          Tip: también puedes hacer clic en el mapa para marcar un punto.
+          <br>Zoom:
+          <input id="zoomInput" type="number" value="16" min="1" max="22" style="width:120px;margin-top:6px;">
+        </div>
+      </div>
+
       <div class="card">
         <div class="muted">Autor: Econ. Marco Acosta G</div>
       </div>
@@ -197,13 +214,14 @@
   <script src="js/labels.js"></script>
   <script src="js/leaflet.photon.js"></script>
 
-  <!-- Data (Guayaquil simplificado) -->
+  <!-- Data (IMPORTANTE: deben existir estos archivos en /data) -->
+  <script src="data/0901_guayaquilsec_a_1.js"></script>
   <script src="data/sec_a_simplificado_guayaquil_2.js"></script>
 
   <script>
     /* ============================
-       Parroquias Guayaquil
-       (si falta alguna, la muestra como código)
+       Diccionario parroquias (según lista que enviaste)
+       OJO: si tu dataset tiene otros códigos, igual mostrará el código.
     ============================ */
     var parroquiasGYE = {
       "090101": "Ayacucho",
@@ -225,6 +243,7 @@
       "090151": "Chongón",
       "090152": "Juan Gómez Rendón",
       "090153": "Morro",
+      "090154": "Pascuales (rural)",
       "090155": "Playas (Gral. Villamil)",
       "090156": "Posorja",
       "090157": "Puná",
@@ -234,7 +253,8 @@
     function parroquiaNombre(codigo) {
       if (codigo == null) return "";
       var c = String(codigo).trim();
-      return parroquiasGYE[c] ? parroquiasGYE[c] : c;
+      var n = parroquiasGYE[c];
+      return n ? n : c;
     }
 
     // =============================
@@ -244,6 +264,7 @@
       .fitBounds([[-3.055568416534909,-80.79536973971003],[-1.9750666742675484,-79.01703571972902]]);
 
     var hash = new L.Hash(map);
+
     map.attributionControl.setPrefix(
       '<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; ' +
       '<a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; ' +
@@ -285,8 +306,12 @@
 
     L.control.zoom({ position: 'topleft' }).addTo(map);
 
+    var bounds_group = new L.featureGroup([]);
+    function setBounds() {}
+
     map.createPane('pane_OpenStreetMap_0');
     map.getPane('pane_OpenStreetMap_0').style.zIndex = 400;
+
     var layer_OpenStreetMap_0 = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       pane: 'pane_OpenStreetMap_0',
       opacity: 1.0,
@@ -298,7 +323,10 @@
     });
     map.addLayer(layer_OpenStreetMap_0);
 
-    function pop_sec_a_simplificado_guayaquil(feature, layer) {
+    // =============================
+    // CAPA SIMPLIFICADA (principal)
+    // =============================
+    function pop_sec_simpl_gye(feature, layer) {
       var p = feature.properties || {};
       var codPar = (p.parroquia != null ? String(p.parroquia).trim() : "");
       var nomPar = parroquiaNombre(codPar);
@@ -316,47 +344,115 @@
       layer.bindPopup(content, { maxHeight: 400 });
     }
 
-    function style_sec_a_simplificado_guayaquil_0(feature) {
+    function style_sec_simpl_gye(feature) {
       switch(String(feature.properties['gy_estrato_sector'])) {
         case 'B':
-          return { pane:'pane_sec_a_simplificado_guayaquil', opacity:1, color:'rgba(35,35,35,1.0)', weight:1.0, fill:true, fillOpacity:1, fillColor:'rgba(49,200,89,0.25882352941176473)', interactive:true };
+          return { pane:'pane_sec_simpl_gye', opacity:1, color:'rgba(35,35,35,1.0)', weight:1.0, fill:true, fillOpacity:1, fillColor:'rgba(49,200,89,0.25882352941176473)', interactive:true };
         case 'C+':
-          return { pane:'pane_sec_a_simplificado_guayaquil', opacity:1, color:'rgba(35,35,35,1.0)', weight:1.0, fill:true, fillOpacity:1, fillColor:'rgba(223,57,181,0.26666666666666666)', interactive:true };
+          return { pane:'pane_sec_simpl_gye', opacity:1, color:'rgba(35,35,35,1.0)', weight:1.0, fill:true, fillOpacity:1, fillColor:'rgba(223,212,20,0.26666666666666666)', interactive:true };
         case 'C-':
-          return { pane:'pane_sec_a_simplificado_guayaquil', opacity:1, color:'rgba(35,35,35,1.0)', weight:1.0, fill:true, fillOpacity:1, fillColor:'rgba(105,131,215,0.25882352941176473)', interactive:true };
+          return { pane:'pane_sec_simpl_gye', opacity:1, color:'rgba(35,35,35,1.0)', weight:1.0, fill:true, fillOpacity:1, fillColor:'rgba(105,131,215,0.25882352941176473)', interactive:true };
         case 'D':
-          return { pane:'pane_sec_a_simplificado_guayaquil', opacity:1, color:'rgba(35,35,35,1.0)', weight:1.0, fill:true, fillOpacity:1, fillColor:'rgba(197,1,22,0.22745098039215686)', interactive:true };
+          return { pane:'pane_sec_simpl_gye', opacity:1, color:'rgba(35,35,35,1.0)', weight:1.0, fill:true, fillOpacity:1, fillColor:'rgba(197,1,22,0.22745098039215686)', interactive:true };
         default:
-          return { pane:'pane_sec_a_simplificado_guayaquil', opacity:1, color:'rgba(35,35,35,1.0)', weight:1.0, fill:true, fillOpacity:1, fillColor:'rgba(225,178,35,1.0)', interactive:true };
+          return { pane:'pane_sec_simpl_gye', opacity:1, color:'rgba(35,35,35,1.0)', weight:1.0, fill:true, fillOpacity:1, fillColor:'rgba(225,178,35,1.0)', interactive:true };
       }
     }
 
-    map.createPane('pane_sec_a_simplificado_guayaquil');
-    map.getPane('pane_sec_a_simplificado_guayaquil').style.zIndex = 401;
-    map.getPane('pane_sec_a_simplificado_guayaquil').style['mix-blend-mode'] = 'normal';
+    map.createPane('pane_sec_simpl_gye');
+    map.getPane('pane_sec_simpl_gye').style.zIndex = 402;
+    map.getPane('pane_sec_simpl_gye').style['mix-blend-mode'] = 'normal';
 
-    var layer_sec_a_simplificado_guayaquil = new L.geoJson(json_sec_a_simplificado_guayaquil_2, {
+    var layer_sec_simpl_gye = new L.geoJson(json_sec_a_simplificado_guayaquil_2, {
       attribution: '',
       interactive: true,
       dataVar: 'json_sec_a_simplificado_guayaquil_2',
-      layerName: 'layer_sec_a_simplificado_guayaquil',
-      pane: 'pane_sec_a_simplificado_guayaquil',
-      onEachFeature: pop_sec_a_simplificado_guayaquil,
-      style: style_sec_a_simplificado_guayaquil_0,
+      layerName: 'layer_sec_simpl_gye',
+      pane: 'pane_sec_simpl_gye',
+      onEachFeature: pop_sec_simpl_gye,
+      style: style_sec_simpl_gye,
     });
-    map.addLayer(layer_sec_a_simplificado_guayaquil);
+
+    bounds_group.addLayer(layer_sec_simpl_gye);
+    map.addLayer(layer_sec_simpl_gye);
 
     // =============================
-    // DASHBOARD + FILTRO
+    // CAPA COMPLETA (opcional, pesada)
+    // =============================
+    function pop_full_gye(feature, layer) {
+      var p = feature.properties || {};
+      var codPar = (p.parroquia != null ? String(p.parroquia).trim() : "");
+      var nomPar = parroquiaNombre(codPar);
+
+      var popupContent = '<table>\
+          <tr><th scope="row">sec</th><td class="visible-with-data" id="sec">' + (p.sec != null ? autolinker.link(String(p.sec)) : '') + '</td></tr>\
+          <tr><th scope="row">parroquia</th><td>' + (codPar ? autolinker.link(codPar) : '') + (nomPar && nomPar !== codPar ? ('<br><b>' + nomPar + '</b>') : '') + '</td></tr>\
+          <tr><th scope="row">estrato</th><td>' + (p.gy_estrato_sector != null ? autolinker.link(String(p.gy_estrato_sector)) : '') + '</td></tr>\
+          <tr><th scope="row">hogares</th><td>' + (p.gy_hogares != null ? autolinker.link(String(p.gy_hogares)) : '') + '</td></tr>\
+          <tr><th scope="row">puntaje prom</th><td class="visible-with-data" id="gy_puntaje_prom">' + (p.gy_puntaje_prom != null ? autolinker.link(String(p.gy_puntaje_prom)) : '') + '</td></tr>\
+        </table>';
+
+      var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+      layer.on('popupopen', function(e) { addClassToPopupIfMedia(content, e.popup); });
+      layer.bindPopup(content, { maxHeight: 400 });
+    }
+
+    function style_full_gye(feature) {
+      // mismo esquema por estrato
+      return style_sec_simpl_gye(feature);
+    }
+
+    map.createPane('pane_full_gye');
+    map.getPane('pane_full_gye').style.zIndex = 401;
+    map.getPane('pane_full_gye').style['mix-blend-mode'] = 'normal';
+
+    var layer_full_gye = new L.geoJson(json_0901_guayaquilsec_a_1, {
+      attribution: '',
+      interactive: true,
+      dataVar: 'json_0901_guayaquilsec_a_1',
+      layerName: 'layer_full_gye',
+      pane: 'pane_full_gye',
+      onEachFeature: pop_full_gye,
+      style: style_full_gye,
+    });
+
+    // NO la agrego por defecto (es pesada). Queda en el control de capas.
+    bounds_group.addLayer(layer_full_gye);
+
+    // =============================
+    // Control de capas
+    // =============================
+    var overlaysTree = [
+      {label: 'sec_a_simplificado_guayaquil', layer: layer_sec_simpl_gye},
+      {label: 'sec_a_guayaquil (completa)', layer: layer_full_gye},
+      {label: "OpenStreetMap", layer: layer_OpenStreetMap_0, radioGroup: 'bm' }
+    ];
+
+    var lay = L.control.layers.tree(null, overlaysTree, { collapsed: true });
+    lay.addTo(map);
+    setBounds();
+
+    // =============================
+    // DASHBOARD + FILTRO (usa capa SIMPLIFICADA)
     // =============================
     function toNumber(x) {
       if (x == null) return 0;
       var n = Number(String(x).replace(',', '.'));
       return Number.isFinite(n) ? n : 0;
     }
-    function normCat(x) { return (x == null) ? '' : String(x).trim(); }
-    function fmtInt(n) { return new Intl.NumberFormat('es-EC', { maximumFractionDigits: 0 }).format(n); }
-    function fmtPct(n) { return new Intl.NumberFormat('es-EC', { maximumFractionDigits: 1 }).format(n) + '%'; }
+
+    function normCat(x) {
+      if (x == null) return '';
+      return String(x).trim();
+    }
+
+    function fmtInt(n) {
+      return new Intl.NumberFormat('es-EC', { maximumFractionDigits: 0 }).format(n);
+    }
+
+    function fmtPct(n) {
+      return new Intl.NumberFormat('es-EC', { maximumFractionDigits: 1 }).format(n) + '%';
+    }
 
     function getAllCategories() {
       var set = new Set();
@@ -403,18 +499,22 @@
       (json_sec_a_simplificado_guayaquil_2.features || []).forEach(function(f) {
         var p = f.properties || {};
         var cat = normCat(p.gy_estrato_sector);
-        if (catFilter === '__ALL__' || cat === catFilter) t += toNumber(p.gy_hogares);
+        if (catFilter === '__ALL__' || cat === catFilter) {
+          t += toNumber(p.gy_hogares);
+        }
       });
       return t;
     }
 
     function applyFilterToLayer(catFilter) {
-      layer_sec_a_simplificado_guayaquil.setStyle(function(feature) {
-        var base = style_sec_a_simplificado_guayaquil_0(feature);
+      layer_sec_simpl_gye.setStyle(function(feature) {
+        var base = style_sec_simpl_gye(feature);
         if (catFilter === '__ALL__') return base;
 
         var cat = normCat(feature.properties && feature.properties.gy_estrato_sector);
-        if (cat === catFilter) return Object.assign({}, base, { fillOpacity: 0.65, opacity: 1 });
+        if (cat === catFilter) {
+          return Object.assign({}, base, { fillOpacity: 0.65, opacity: 1 });
+        }
         return Object.assign({}, base, { fillOpacity: 0.06, opacity: 0.2 });
       });
     }
@@ -428,11 +528,13 @@
       document.getElementById('kpiHogaresFiltro').textContent = fmtInt(hf);
       document.getElementById('kpiPctFiltro').textContent = fmtPct(pct);
 
-      document.getElementById('pillFiltro').textContent = (catFilter === '__ALL__') ? 'Todos' : catFilter;
+      var pill = (catFilter === '__ALL__') ? 'Todos' : catFilter;
+      document.getElementById('pillFiltro').textContent = pill;
 
       var tb = document.getElementById('tablaEstratos');
       tb.innerHTML = '';
       var byCat = totalsByCategory();
+
       Object.keys(byCat).sort().forEach(function(cat) {
         var hogares = byCat[cat];
         var p = total > 0 ? (hogares / total) * 100 : 0;
@@ -442,6 +544,7 @@
       });
 
       var cods = uniqueParroquiasByFilter(catFilter);
+
       cods.sort(function(a,b){
         var na = parroquiaNombre(a).toLowerCase();
         var nb = parroquiaNombre(b).toLowerCase();
@@ -500,6 +603,66 @@
       applyFilterToLayer('__ALL__');
       renderDashboard('__ALL__');
     })();
+
+    // =============================
+    // IR A PUNTO + CLICK (tipo Google Maps)
+    // =============================
+    function parseLatLng(str){
+      if(!str) return null;
+      const cleaned = str.trim().replace(/\s+/g,' ');
+      let parts = cleaned.includes(',') ? cleaned.split(',') : cleaned.split(' ');
+      if(parts.length < 2) return null;
+
+      let lat = parseFloat(String(parts[0]).trim().replace(',', '.'));
+      let lng = parseFloat(String(parts[1]).trim().replace(',', '.'));
+      if(!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return {lat, lng};
+    }
+
+    function goToPoint(lat, lng, z){
+      const zoom = Number.isFinite(+z) ? +z : 16;
+      map.flyTo([lat, lng], zoom, { duration: 1.2 });
+      if(window._pinMarker) map.removeLayer(window._pinMarker);
+      window._pinMarker = L.marker([lat, lng]).addTo(map).bindPopup(
+        `<b>Punto</b><br>${lat.toFixed(6)}, ${lng.toFixed(6)}`
+      ).openPopup();
+    }
+
+    document.getElementById('btnIrPunto')?.addEventListener('click', function(){
+      const v = document.getElementById('coordInput').value;
+      const z = document.getElementById('zoomInput').value;
+      const p = parseLatLng(v);
+      if(!p){ alert('Formato inválido. Usa: lat, lng'); return; }
+      goToPoint(p.lat, p.lng, z);
+    });
+
+    document.getElementById('btnCopiarLink')?.addEventListener('click', async function(){
+      const c = map.getCenter();
+      const z = map.getZoom();
+      const url = `${location.origin}${location.pathname}#${z}/${c.lat.toFixed(6)}/${c.lng.toFixed(6)}`;
+      try{
+        await navigator.clipboard.writeText(url);
+        alert('Link copiado ✅');
+      }catch(e){
+        prompt('Copia este link:', url);
+      }
+    });
+
+    // click para marcar punto + autollenar input
+    map.on('click', function(e){
+      const lat = e.latlng.lat;
+      const lng = e.latlng.lng;
+      const z = map.getZoom();
+      const url = `${location.origin}${location.pathname}#${z}/${lat.toFixed(6)}/${lng.toFixed(6)}`;
+
+      var input = document.getElementById('coordInput');
+      if (input) input.value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+      if(window._clickMarker) map.removeLayer(window._clickMarker);
+      window._clickMarker = L.marker([lat,lng]).addTo(map).bindPopup(
+        `<b>Coordenada</b><br>${lat.toFixed(6)}, ${lng.toFixed(6)}<br><small>${url}</small>`
+      ).openPopup();
+    });
   </script>
 </body>
 </html>
