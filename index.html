@@ -68,6 +68,7 @@
       outline: none;
       box-sizing: border-box;
     }
+
     .btnRow { display:flex; gap:10px; margin-top: 10px; }
     .btn {
       flex: 1;
@@ -78,11 +79,10 @@
       cursor: pointer;
       font-weight: 700;
       font-size: 13px;
-      text-align: center;
-      user-select: none;
     }
     .btn.primary { background: #111827; color: #fff; border-color: #111827; }
     .btn:active { transform: translateY(1px); }
+    .btn[disabled] { opacity: .55; cursor: not-allowed; transform: none; }
 
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 8px 0; font-size: 13px; }
@@ -109,28 +109,15 @@
       text-overflow: ellipsis;
     }
 
-    /* Mini hint dentro del card */
-    .hint {
-      margin-top: 8px;
-      font-size: 12px;
-      color: rgba(0,0,0,.58);
-      line-height: 1.35;
-    }
-
-    /* Link estilo botón */
-    .btnLink {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      text-decoration: none;
-    }
+    .miniRow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .miniHint { margin-top: 8px; font-size: 12px; color: rgba(0,0,0,.62); line-height: 1.35; }
+    .svRow { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
 
     @media (max-width: 900px) { #sidebar { width: 320px; } }
     @media (max-width: 720px) {
       #app { flex-direction: column; }
       #sidebar { width: 100%; max-width: none; border-right: none; border-bottom: 1px solid rgba(0,0,0,.08); }
-      #map { height: calc(100vh - 420px); min-height: 320px; }
+      #map { height: calc(100vh - 520px); min-height: 320px; }
     }
   </style>
 </head>
@@ -196,36 +183,35 @@
         <ul class="list" id="listaParroquias"></ul>
       </div>
 
-      <!-- ✅ NUEVO: IR A UN PUNTO + STREET VIEW (SIN TOCAR NADA MÁS) -->
-      <div class="card" id="cardIrPunto">
+      <!-- ✅ NUEVO (sin perder nada): Ir a un punto + Street View -->
+      <div class="card">
         <div class="h1" style="font-size:14px;margin-bottom:6px">Ir a un punto</div>
-        <div class="muted" style="margin-bottom:8px">Latitud, Longitud (ej: <b>-2.1894, -79.8891</b>)</div>
+        <div class="muted">Latitud, Longitud (ej: -2.1894, -79.8891)</div>
 
-        <input id="inputLatLon" type="text" placeholder="-2.1894, -79.8891" />
+        <div style="margin-top:8px">
+          <input id="inputLatLon" type="text" placeholder="-2.1894, -79.8891">
+        </div>
 
         <div class="btnRow">
-          <button class="btn primary" id="btnIrPunto">Ir</button>
-          <button class="btn" id="btnCopiarLink">Copiar link</button>
+          <button class="btn primary" id="btnGoPoint">Ir</button>
+          <button class="btn" id="btnCopyLink">Copiar link</button>
         </div>
 
-        <div style="margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div class="miniRow">
           <div>
-            <label for="inputZoom">Zoom</label>
-            <input id="inputZoom" type="number" min="1" max="28" value="16" />
+            <label for="inputZoom" style="margin-top:0">Zoom</label>
+            <input id="inputZoom" type="number" min="1" max="28" step="1" value="16">
           </div>
           <div>
-            <label>Street View</label>
-            <a id="btnStreetView" class="btn btnLink" href="#" target="_blank" rel="noopener" style="width:100%; pointer-events:none; opacity:.45;">
-              Abrir
-            </a>
+            <label style="margin-top:0">Street View</label>
+            <button class="btn" id="btnStreetView" disabled>Abrir</button>
           </div>
         </div>
 
-        <div class="hint">
-          Tip: también puedes hacer <b>clic</b> en el mapa para marcar un punto y habilitar Street View.
+        <div class="miniHint" id="streetHelp">
+          Tip: también puedes hacer clic en el mapa para marcar un punto y habilitar Street View.
         </div>
       </div>
-      <!-- /NUEVO -->
 
       <div class="card">
         <div class="muted">Autor: Econ. Marco Acosta G</div>
@@ -254,6 +240,7 @@
   <script>
     /* ============================
        Parroquias Guayaquil
+       (si falta alguna, la muestra como código)
     ============================ */
     var parroquiasGYE = {
       "090101": "Ayacucho",
@@ -302,37 +289,6 @@
 
     var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
 
-    function removeEmptyRowsFromPopupContent(content, feature) {
-      var tempDiv = document.createElement('div');
-      tempDiv.innerHTML = content;
-      var rows = tempDiv.querySelectorAll('tr');
-      for (var i = 0; i < rows.length; i++) {
-        var td = rows[i].querySelector('td.visible-with-data');
-        var key = td ? td.id : '';
-        if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
-          rows[i].parentNode.removeChild(rows[i]);
-        }
-      }
-      return tempDiv.innerHTML;
-    }
-
-    function addClassToPopupIfMedia(content, popup) {
-      var tempDiv = document.createElement('div');
-      tempDiv.innerHTML = content;
-      var imgTd = tempDiv.querySelector('td img');
-      if (imgTd) {
-        var src = imgTd.getAttribute('src');
-        if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
-          popup._contentNode.classList.add('media');
-          setTimeout(function() { popup.update(); }, 10);
-        } else {
-          popup._contentNode.classList.remove('media');
-        }
-      } else {
-        popup._contentNode.classList.remove('media');
-      }
-    }
-
     L.control.zoom({ position: 'topleft' }).addTo(map);
 
     map.createPane('pane_OpenStreetMap_0');
@@ -348,22 +304,51 @@
     });
     map.addLayer(layer_OpenStreetMap_0);
 
-    function pop_sec_a_simplificado_guayaquil(feature, layer) {
-      var p = feature.properties || {};
+    // =============================
+    // POPUP HTML (igual info + Street View)
+    // =============================
+    function escHtml(s){
+      return String(s).replace(/[&<>"']/g, function(m){
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]);
+      });
+    }
+
+    function streetViewUrl(lat, lon) {
+      // Street View (si hay cobertura en ese punto)
+      return 'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + lat + ',' + lon;
+    }
+
+    function markerPopupHtml(props, latlng) {
+      var p = props || {};
       var codPar = (p.parroquia != null ? String(p.parroquia).trim() : "");
       var nomPar = parroquiaNombre(codPar);
+      var lat = Number(latlng.lat).toFixed(6);
+      var lon = Number(latlng.lng).toFixed(6);
 
-      var popupContent = '<table>\
-          <tr><th scope="row">sec</th><td class="visible-with-data" id="sec">' + (p.sec != null ? autolinker.link(String(p.sec)) : '') + '</td></tr>\
-          <tr><th scope="row">parroquia</th><td>' + (codPar ? autolinker.link(codPar) : '') + (nomPar && nomPar !== codPar ? ('<br><b>' + nomPar + '</b>') : '') + '</td></tr>\
-          <tr><th scope="row">estrato</th><td>' + (p.gy_estrato_sector != null ? autolinker.link(String(p.gy_estrato_sector)) : '') + '</td></tr>\
-          <tr><th scope="row">hogares</th><td>' + (p.gy_hogares != null ? autolinker.link(String(p.gy_hogares)) : '') + '</td></tr>\
-          <tr><th scope="row">puntaje prom</th><td class="visible-with-data" id="gy_puntaje_prom">' + (p.gy_puntaje_prom != null ? autolinker.link(String(p.gy_puntaje_prom)) : '') + '</td></tr>\
-        </table>';
+      var html = ''
+        + '<div style="min-width:220px">'
+        + '<table style="width:100%;border-collapse:collapse">'
+        + '  <tr><th style="text-align:left;padding:6px 0;font-size:12px;color:rgba(0,0,0,.62);border-bottom:1px solid rgba(0,0,0,.08)">Campo</th>'
+        + '      <th style="text-align:left;padding:6px 0;font-size:12px;color:rgba(0,0,0,.62);border-bottom:1px solid rgba(0,0,0,.08)">Valor</th></tr>'
+        + '  <tr><td style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.08)">sec</td><td style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.08)">' + (p.sec != null ? escHtml(p.sec) : '—') + '</td></tr>'
+        + '  <tr><td style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.08)">parroquia</td><td style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.08)">' + (codPar ? escHtml(codPar) : '—') + (nomPar && nomPar !== codPar ? ('<br><b>' + escHtml(nomPar) + '</b>') : '') + '</td></tr>'
+        + '  <tr><td style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.08)">estrato</td><td style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.08)">' + (p.gy_estrato_sector != null ? escHtml(p.gy_estrato_sector) : '—') + '</td></tr>'
+        + '  <tr><td style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.08)">hogares</td><td style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.08)">' + (p.gy_hogares != null ? escHtml(p.gy_hogares) : '—') + '</td></tr>'
+        + '  <tr><td style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.08)">puntaje prom</td><td style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.08)">' + (p.gy_puntaje_prom != null ? escHtml(p.gy_puntaje_prom) : '—') + '</td></tr>'
+        + '</table>'
+        + '<div style="margin-top:10px;font-size:12px;color:rgba(0,0,0,.62);line-height:1.35">'
+        + 'Street View te muestra la vista a nivel de calle (si Google tiene cobertura) del entorno del punto marcado.'
+        + '</div>'
+        + '<div style="margin-top:10px;display:flex;gap:8px">'
+        + '  <a href="' + streetViewUrl(lat, lon) + '" target="_blank" rel="noopener" '
+        + '     style="flex:1;text-align:center;text-decoration:none;font-weight:800;font-size:12px;padding:9px 10px;border-radius:10px;background:#111827;color:#fff;border:1px solid #111827">'
+        + '     Ver Street View'
+        + '  </a>'
+        + '</div>'
+        + '<div style="margin-top:8px;font-size:11px;color:rgba(0,0,0,.55)">Coordenadas: ' + lat + ', ' + lon + '</div>'
+        + '</div>';
 
-      var content = removeEmptyRowsFromPopupContent(popupContent, feature);
-      layer.on('popupopen', function(e) { addClassToPopupIfMedia(content, e.popup); });
-      layer.bindPopup(content, { maxHeight: 400 });
+      return html;
     }
 
     function style_sec_a_simplificado_guayaquil_0(feature) {
@@ -391,13 +376,20 @@
       dataVar: 'json_sec_a_simplificado_guayaquil_2',
       layerName: 'layer_sec_a_simplificado_guayaquil',
       pane: 'pane_sec_a_simplificado_guayaquil',
-      onEachFeature: pop_sec_a_simplificado_guayaquil,
       style: style_sec_a_simplificado_guayaquil_0,
+      onEachFeature: function(feature, layer) {
+        // ✅ Click en el sector: marca punto + muestra popup con info + Street View
+        layer.on('click', function(e) {
+          if (e && e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+          setPoint(e.latlng);
+          openPointPopup(e.latlng, feature.properties || {});
+        });
+      }
     });
     map.addLayer(layer_sec_a_simplificado_guayaquil);
 
     // =============================
-    // DASHBOARD + FILTRO (TU CÓDIGO)
+    // DASHBOARD + FILTRO (NO SE TOCA)
     // =============================
     function toNumber(x) {
       if (x == null) return 0;
@@ -552,109 +544,226 @@
     })();
 
     // =============================
-    // ✅ NUEVO: IR A UN PUNTO + STREET VIEW (SIN AFECTAR EL DASHBOARD)
+    // ✅ PUNTO + STREET VIEW (sin perder nada)
     // =============================
     var pointMarker = null;
+    var pointPopup = null;
+    var lastPoint = null;
 
-    function parseLatLon(str) {
-      if (!str) return null;
-      var s = String(str).trim().replace(/\s+/g, '');
-      var parts = s.split(',');
-      if (parts.length !== 2) return null;
+    function setStreetViewEnabled(enabled, latlng) {
+      var btn = document.getElementById('btnStreetView');
+      btn.disabled = !enabled;
+      if (!enabled) return;
+      btn.onclick = function() {
+        var lat = Number(latlng.lat).toFixed(6);
+        var lon = Number(latlng.lng).toFixed(6);
+        window.open(streetViewUrl(lat, lon), '_blank', 'noopener');
+      };
+    }
+
+    function updateUrlPoint(latlng) {
+      try {
+        var url = new URL(window.location.href);
+        url.searchParams.set('p', Number(latlng.lat).toFixed(6) + ',' + Number(latlng.lng).toFixed(6));
+        url.searchParams.set('z', String(map.getZoom()));
+        history.replaceState(null, '', url.toString());
+      } catch (e) {}
+    }
+
+    function setPoint(latlng) {
+      lastPoint = latlng;
+
+      if (!pointMarker) {
+        pointMarker = L.marker(latlng, { draggable: false }).addTo(map);
+      } else {
+        pointMarker.setLatLng(latlng);
+      }
+
+      // refleja en input
+      document.getElementById('inputLatLon').value =
+        Number(latlng.lat).toFixed(6) + ', ' + Number(latlng.lng).toFixed(6);
+
+      // Street View habilitado
+      setStreetViewEnabled(true, latlng);
+
+      // actualiza URL (para que copiar link sea exacto)
+      updateUrlPoint(latlng);
+    }
+
+    function openPointPopup(latlng, props) {
+      var html = markerPopupHtml(props, latlng);
+      pointPopup = L.popup({ maxWidth: 340 })
+        .setLatLng(latlng)
+        .setContent(html)
+        .openOn(map);
+    }
+
+    function parseLatLon(text) {
+      if (!text) return null;
+      var t = String(text).trim()
+        .replace(/\s+/g, ' ')
+        .replace(';', ',');
+      var parts = t.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+      if (parts.length < 2) {
+        // intenta con espacio
+        parts = t.split(' ').map(function(x){ return x.trim(); }).filter(Boolean);
+      }
+      if (parts.length < 2) return null;
       var lat = Number(parts[0]);
       var lon = Number(parts[1]);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-      if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
-      return { lat: lat, lon: lon };
+      return L.latLng(lat, lon);
     }
 
-    function setPoint(lat, lon, zoomOpt) {
-      var z = zoomOpt != null ? zoomOpt : map.getZoom();
-      var ll = L.latLng(lat, lon);
-
-      if (pointMarker) {
-        pointMarker.setLatLng(ll);
-      } else {
-        pointMarker = L.marker(ll, { draggable: true }).addTo(map);
-        pointMarker.on('dragend', function() {
-          var p = pointMarker.getLatLng();
-          syncPointUI(p.lat, p.lng);
-        });
+    // ===== point-in-polygon (para "Ir a un punto" con info del sector)
+    function computeBBox(coords, bbox) {
+      bbox = bbox || {minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity};
+      if (typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+        var x = coords[0], y = coords[1];
+        if (x < bbox.minX) bbox.minX = x;
+        if (y < bbox.minY) bbox.minY = y;
+        if (x > bbox.maxX) bbox.maxX = x;
+        if (y > bbox.maxY) bbox.maxY = y;
+        return bbox;
       }
-
-      map.setView(ll, z, { animate: true });
-
-      syncPointUI(lat, lon);
+      for (var i=0;i<coords.length;i++) computeBBox(coords[i], bbox);
+      return bbox;
     }
 
-    function streetViewUrl(lat, lon) {
-      // "cbll" fuerza el punto; layer=c muestra Street View (si existe cobertura)
-      return 'https://www.google.com/maps?layer=c&cbll=' + encodeURIComponent(lat + ',' + lon);
+    function pointInRing(pt, ring) {
+      // pt: [lon, lat]
+      var x = pt[0], y = pt[1];
+      var inside = false;
+      for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        var xi = ring[i][0], yi = ring[i][1];
+        var xj = ring[j][0], yj = ring[j][1];
+
+        var intersect = ((yi > y) !== (yj > y)) &&
+          (x < (xj - xi) * (y - yi) / ((yj - yi) || 1e-12) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
     }
 
-    function syncPointUI(lat, lon) {
-      var latFixed = Number(lat).toFixed(6);
-      var lonFixed = Number(lon).toFixed(6);
-
-      document.getElementById('inputLatLon').value = latFixed + ',' + lonFixed;
-
-      var sv = document.getElementById('btnStreetView');
-      sv.href = streetViewUrl(latFixed, lonFixed);
-      sv.style.pointerEvents = 'auto';
-      sv.style.opacity = '1';
-
-      // opcional: podrías mostrar un mini texto con coordenadas actuales
+    function pointInPolygonCoords(pt, polyCoords) {
+      // polyCoords: [ [ring], [hole], ... ]
+      if (!polyCoords || !polyCoords.length) return false;
+      if (!pointInRing(pt, polyCoords[0])) return false;
+      for (var h=1; h<polyCoords.length; h++) {
+        if (pointInRing(pt, polyCoords[h])) return false;
+      }
+      return true;
     }
 
-    function currentMapLink(lat, lon, zoom) {
-      // Formato #zoom/lat/lon (compatible con leaflet-hash)
-      var z = zoom != null ? zoom : map.getZoom();
-      return location.origin + location.pathname + '#' + z + '/' + Number(lat).toFixed(4) + '/' + Number(lon).toFixed(4);
+    var featureIndex = (function buildFeatureIndex(){
+      var idx = [];
+      (json_sec_a_simplificado_guayaquil_2.features || []).forEach(function(f){
+        var g = f.geometry || {};
+        var bbox = computeBBox(g.coordinates);
+        idx.push({ feature: f, bbox: bbox });
+      });
+      return idx;
+    })();
+
+    function findFeatureAtLatLng(latlng) {
+      var pt = [latlng.lng, latlng.lat]; // lon, lat
+      for (var i=0; i<featureIndex.length; i++) {
+        var item = featureIndex[i];
+        var b = item.bbox;
+        if (pt[0] < b.minX || pt[0] > b.maxX || pt[1] < b.minY || pt[1] > b.maxY) continue;
+
+        var g = (item.feature.geometry || {});
+        if (g.type === 'Polygon') {
+          if (pointInPolygonCoords(pt, g.coordinates)) return item.feature;
+        } else if (g.type === 'MultiPolygon') {
+          for (var k=0; k<g.coordinates.length; k++) {
+            if (pointInPolygonCoords(pt, g.coordinates[k])) return item.feature;
+          }
+        }
+      }
+      return null;
     }
 
-    document.getElementById('btnIrPunto').addEventListener('click', function() {
-      var v = document.getElementById('inputLatLon').value;
-      var p = parseLatLon(v);
-      if (!p) {
-        alert('Formato inválido. Usa: lat, lon   Ej: -2.1894, -79.8891');
+    // Click en el mapa (cualquier lugar): marca punto + habilita Street View + si cae dentro de un sector, muestra su info
+    map.on('click', function(e) {
+      setPoint(e.latlng);
+      var f = findFeatureAtLatLng(e.latlng);
+      if (f && f.properties) openPointPopup(e.latlng, f.properties);
+      else openPointPopup(e.latlng, {}); // igual muestra Street View + coords
+    });
+
+    // UI: Ir a un punto
+    document.getElementById('btnGoPoint').addEventListener('click', function() {
+      var latlng = parseLatLon(document.getElementById('inputLatLon').value);
+      if (!latlng) {
+        alert('Formato inválido. Usa: latitud, longitud  (ej: -2.1894, -79.8891)');
         return;
       }
-      var zoom = Number(document.getElementById('inputZoom').value);
-      if (!Number.isFinite(zoom) || zoom < 1 || zoom > 28) zoom = 16;
-      setPoint(p.lat, p.lon, zoom);
+      var z = Number(document.getElementById('inputZoom').value);
+      if (!Number.isFinite(z)) z = 16;
+
+      map.setView(latlng, Math.max(1, Math.min(28, z)));
+      setPoint(latlng);
+
+      var f = findFeatureAtLatLng(latlng);
+      if (f && f.properties) openPointPopup(latlng, f.properties);
+      else openPointPopup(latlng, {});
     });
 
-    document.getElementById('btnCopiarLink').addEventListener('click', async function() {
-      var v = document.getElementById('inputLatLon').value;
-      var p = parseLatLon(v);
-
-      var z = Number(document.getElementById('inputZoom').value);
-      if (!Number.isFinite(z) || z < 1 || z > 28) z = map.getZoom();
-
-      var link = (p ? currentMapLink(p.lat, p.lon, z) : location.href);
-
+    // UI: Copiar link
+    document.getElementById('btnCopyLink').addEventListener('click', async function() {
       try {
-        await navigator.clipboard.writeText(link);
-        alert('Link copiado ✅');
-      } catch(e) {
-        // fallback
-        var tmp = document.createElement('textarea');
-        tmp.value = link;
-        document.body.appendChild(tmp);
-        tmp.select();
-        document.execCommand('copy');
-        document.body.removeChild(tmp);
-        alert('Link copiado ✅');
+        var url = new URL(window.location.href);
+        // asegura que el link tenga punto y zoom si ya existe
+        if (lastPoint) {
+          url.searchParams.set('p', Number(lastPoint.lat).toFixed(6) + ',' + Number(lastPoint.lng).toFixed(6));
+          url.searchParams.set('z', String(map.getZoom()));
+        }
+        var text = url.toString();
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+          document.getElementById('streetHelp').textContent = '✅ Link copiado. Compártelo para abrir el mapa en el mismo punto.';
+          setTimeout(function(){
+            document.getElementById('streetHelp').textContent = 'Tip: también puedes hacer clic en el mapa para marcar un punto y habilitar Street View.';
+          }, 3500);
+        } else {
+          window.prompt('Copia este link:', text);
+        }
+      } catch (e) {
+        window.prompt('Copia este link:', window.location.href);
       }
     });
 
-    // Click en mapa -> define punto y habilita Street View
-    map.on('click', function(e) {
-      var zoom = Number(document.getElementById('inputZoom').value);
-      if (!Number.isFinite(zoom) || zoom < 1 || zoom > 28) zoom = map.getZoom();
-      setPoint(e.latlng.lat, e.latlng.lng, zoom);
+    // UI: Street View (botón)
+    document.getElementById('btnStreetView').addEventListener('click', function() {
+      if (!lastPoint) return;
+      var lat = Number(lastPoint.lat).toFixed(6);
+      var lon = Number(lastPoint.lng).toFixed(6);
+      window.open(streetViewUrl(lat, lon), '_blank', 'noopener');
     });
 
+    // Restaurar punto desde URL (?p=lat,lon&z=16)
+    (function restoreFromUrl(){
+      try {
+        var url = new URL(window.location.href);
+        var p = url.searchParams.get('p');
+        var z = url.searchParams.get('z');
+        if (!p) return;
+
+        var latlng = parseLatLon(p);
+        if (!latlng) return;
+
+        var zoom = Number(z);
+        if (!Number.isFinite(zoom)) zoom = 16;
+
+        map.setView(latlng, Math.max(1, Math.min(28, zoom)));
+        setPoint(latlng);
+
+        var f = findFeatureAtLatLng(latlng);
+        if (f && f.properties) openPointPopup(latlng, f.properties);
+        else openPointPopup(latlng, {});
+      } catch (e) {}
+    })();
   </script>
 </body>
 </html>
